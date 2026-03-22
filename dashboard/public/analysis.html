@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Crucix — Analysis</title>
+<style>
+  :root {
+    --bg: #020408;
+    --panel: rgba(6,14,22,0.92);
+    --border: rgba(68,204,255,0.18);
+    --accent: #44ccff;
+    --accent2: #00ff9f;
+    --danger: #ff4466;
+    --warn: #ffaa00;
+    --text: #c8dde8;
+    --dim: #5a7a8a;
+    --font: 'Courier New', Courier, monospace;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font);
+    font-size: 13px;
+    min-height: 100vh;
+  }
+
+  /* Subtle scanline overlay */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background: repeating-linear-gradient(
+      0deg, transparent, transparent 2px,
+      rgba(0,0,0,0.08) 2px, rgba(0,0,0,0.08) 4px
+    );
+    pointer-events: none;
+    z-index: 9999;
+  }
+
+  header {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 12px 20px;
+    border-bottom: 1px solid var(--border);
+    background: var(--panel);
+    backdrop-filter: blur(16px);
+  }
+
+  header h1 {
+    font-size: 14px;
+    letter-spacing: 0.12em;
+    color: var(--accent);
+    text-transform: uppercase;
+  }
+
+  header a {
+    margin-left: auto;
+    color: var(--dim);
+    text-decoration: none;
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    border: 1px solid var(--border);
+    padding: 4px 10px;
+  }
+
+  header a:hover { color: var(--accent); border-color: var(--accent); }
+
+  .badge {
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    padding: 2px 8px;
+    border: 1px solid var(--border);
+    color: var(--dim);
+    text-transform: uppercase;
+  }
+
+  main {
+    padding: 20px;
+    display: grid;
+    gap: 16px;
+    max-width: 1200px;
+    margin: 0 auto;
+  }
+
+  .row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+  }
+
+  @media (max-width: 768px) { .row { grid-template-columns: 1fr; } }
+
+  .panel {
+    border: 1px solid var(--border);
+    background: var(--panel);
+    backdrop-filter: blur(16px);
+    padding: 14px;
+    position: relative;
+  }
+
+  .panel::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0; height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(68,204,255,0.2), transparent);
+  }
+
+  .panel-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 12px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .panel-head h2 {
+    font-size: 11px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--accent);
+  }
+
+  .panel-head .count {
+    margin-left: auto;
+    font-size: 10px;
+    color: var(--dim);
+  }
+
+  /* Job list */
+  .job-row {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    padding: 5px 0;
+    border-bottom: 1px solid rgba(68,204,255,0.06);
+    font-size: 12px;
+  }
+
+  .job-row:last-child { border-bottom: none; }
+
+  .job-id {
+    color: var(--accent);
+    min-width: 200px;
+    font-size: 11px;
+  }
+
+  .job-desc { color: var(--dim); font-size: 11px; }
+
+  .enabled-dot {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: var(--accent2);
+    flex-shrink: 0;
+    margin-top: 2px;
+  }
+
+  .enabled-dot.off { background: var(--danger); }
+
+  /* Insight cards */
+  .insight {
+    padding: 10px;
+    border: 1px solid var(--border);
+    margin-bottom: 8px;
+    position: relative;
+  }
+
+  .insight:last-child { margin-bottom: 0; }
+
+  .insight-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 6px;
+  }
+
+  .sev {
+    font-size: 9px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    padding: 2px 6px;
+    border: 1px solid;
+  }
+
+  .sev.critical { color: var(--danger); border-color: var(--danger); }
+  .sev.alert    { color: var(--warn); border-color: var(--warn); }
+  .sev.warning  { color: #ffcc44; border-color: #ffcc44; }
+  .sev.info     { color: var(--dim); border-color: var(--border); }
+
+  .insight-title { font-size: 12px; color: var(--text); }
+  .insight-detail { font-size: 11px; color: var(--dim); margin-top: 4px; line-height: 1.5; }
+
+  .insight-tags {
+    display: flex; gap: 4px; flex-wrap: wrap; margin-top: 6px;
+  }
+
+  .tag {
+    font-size: 9px;
+    padding: 1px 5px;
+    border: 1px solid var(--border);
+    color: var(--dim);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  .insight-job { font-size: 10px; color: var(--dim); margin-top: 4px; }
+
+  /* Status bar */
+  .statusbar {
+    font-size: 10px;
+    color: var(--dim);
+    letter-spacing: 0.06em;
+    padding: 10px 20px;
+    border-top: 1px solid var(--border);
+    display: flex;
+    gap: 16px;
+    flex-wrap: wrap;
+  }
+
+  .statusbar span { color: var(--accent); }
+
+  .empty {
+    color: var(--dim);
+    font-size: 11px;
+    padding: 20px 0;
+    text-align: center;
+    letter-spacing: 0.06em;
+  }
+
+  .error-msg {
+    color: var(--danger);
+    font-size: 11px;
+    padding: 12px;
+    border: 1px solid var(--danger);
+    background: rgba(255,68,102,0.06);
+  }
+
+  .refresh-btn {
+    background: none;
+    border: 1px solid var(--border);
+    color: var(--dim);
+    font-family: var(--font);
+    font-size: 11px;
+    padding: 4px 12px;
+    cursor: pointer;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  .refresh-btn:hover { border-color: var(--accent); color: var(--accent); }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>&#9632; Crucix // Analysis</h1>
+  <span class="badge" id="statusBadge">LOADING</span>
+  <button class="refresh-btn" onclick="load()">&#8635; Refresh</button>
+  <a href="/">&#8592; Dashboard</a>
+</header>
+
+<main>
+  <div class="row">
+    <!-- Registered Jobs -->
+    <div class="panel" id="jobsPanel">
+      <div class="panel-head">
+        <h2>Analysis Jobs</h2>
+        <span class="count" id="jobCount">—</span>
+      </div>
+      <div id="jobList"><div class="empty">Loading...</div></div>
+    </div>
+
+    <!-- Latest Run Stats -->
+    <div class="panel" id="statsPanel">
+      <div class="panel-head">
+        <h2>Last Run</h2>
+        <span class="count" id="insightCount">—</span>
+      </div>
+      <div id="statsList"><div class="empty">Loading...</div></div>
+    </div>
+  </div>
+
+  <!-- Insights Feed -->
+  <div class="panel" id="insightsPanel">
+    <div class="panel-head">
+      <h2>Insights</h2>
+      <span class="count" id="insightTotal">—</span>
+    </div>
+    <div id="insightList"><div class="empty">Loading...</div></div>
+  </div>
+</main>
+
+<div class="statusbar">
+  <div>ENDPOINT: <span>/api/analysis</span></div>
+  <div>REFRESHED: <span id="refreshedAt">—</span></div>
+  <div>JOBS: <span id="sbJobs">—</span></div>
+  <div>INSIGHTS: <span id="sbInsights">—</span></div>
+</div>
+
+<script>
+const SEV_ORDER = { critical: 0, alert: 1, warning: 2, info: 3 };
+
+function severityClass(s) {
+  return { critical: 'critical', alert: 'alert', warning: 'warning', info: 'info' }[s] || 'info';
+}
+
+function renderJobs(jobs) {
+  const el = document.getElementById('jobList');
+  if (!jobs || !jobs.length) { el.innerHTML = '<div class="empty">No jobs registered</div>'; return; }
+  document.getElementById('jobCount').textContent = `${jobs.length} registered`;
+  el.innerHTML = jobs.map(j => `
+    <div class="job-row">
+      <div class="enabled-dot ${j.enabled ? '' : 'off'}"></div>
+      <div class="job-id">${escHtml(j.id)}</div>
+      <div class="job-desc">${escHtml(j.description || j.name || '')}</div>
+    </div>
+  `).join('');
+}
+
+function renderStats(results) {
+  const el = document.getElementById('statsList');
+  if (!results || !results.length) { el.innerHTML = '<div class="empty">No results yet — waiting for first sweep</div>'; return; }
+  document.getElementById('insightCount').textContent = `${results.length} job${results.length !== 1 ? 's' : ''} ran`;
+  el.innerHTML = results.map(r => {
+    const err = r._error ? `<div class="error-msg">Error: ${escHtml(r._error)}</div>` : '';
+    return `
+      <div class="job-row">
+        <div class="job-id">${escHtml(r.jobId)}</div>
+        <div class="job-desc">${r.insights ? r.insights.length : 0} insight${r.insights?.length !== 1 ? 's' : ''}
+          ${r._durationMs != null ? ` · ${r._durationMs}ms` : ''}</div>
+      </div>
+      ${err}
+    `;
+  }).join('');
+}
+
+function renderInsights(insights) {
+  const el = document.getElementById('insightList');
+  document.getElementById('insightTotal').textContent = `${insights.length} insight${insights.length !== 1 ? 's' : ''}`;
+
+  if (!insights.length) {
+    el.innerHTML = '<div class="empty">No insights yet — run a sweep to generate analysis</div>';
+    return;
+  }
+
+  // Sort by severity
+  const sorted = [...insights].sort((a, b) => (SEV_ORDER[a.severity] ?? 9) - (SEV_ORDER[b.severity] ?? 9));
+
+  el.innerHTML = sorted.map(i => `
+    <div class="insight">
+      <div class="insight-head">
+        <span class="sev ${severityClass(i.severity)}">${(i.severity || 'info').toUpperCase()}</span>
+        <div class="insight-title">${escHtml(i.title || '')}</div>
+      </div>
+      ${i.detail ? `<div class="insight-detail">${escHtml(i.detail)}</div>` : ''}
+      ${i.tags?.length ? `<div class="insight-tags">${i.tags.map(t => `<span class="tag">${escHtml(t)}</span>`).join('')}</div>` : ''}
+      <div class="insight-job">job: ${escHtml(i.jobId || '?')}</div>
+    </div>
+  `).join('');
+}
+
+function escHtml(str) {
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+async function load() {
+  document.getElementById('statusBadge').textContent = 'LOADING';
+  try {
+    const res = await fetch('/api/analysis');
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+
+    renderJobs(data.jobs || []);
+    renderStats(data.results || []);
+    renderInsights(data.insights || []);
+
+    const ts = data.timestamp ? new Date(data.timestamp).toLocaleTimeString() : '—';
+    document.getElementById('refreshedAt').textContent = ts;
+    document.getElementById('sbJobs').textContent = (data.jobs || []).length;
+    document.getElementById('sbInsights').textContent = (data.insights || []).length;
+    document.getElementById('statusBadge').textContent = 'OK';
+  } catch (err) {
+    document.getElementById('statusBadge').textContent = 'ERROR';
+    document.getElementById('insightList').innerHTML = `<div class="error-msg">Failed to fetch /api/analysis: ${escHtml(err.message)}</div>`;
+  }
+}
+
+// Auto-refresh every 60s (aligned with sweep cycle)
+load();
+setInterval(load, 60000);
+</script>
+
+</body>
+</html>

@@ -16,6 +16,7 @@ import { createLLMProvider } from './lib/llm/index.mjs';
 import { generateLLMIdeas } from './lib/llm/ideas.mjs';
 import { TelegramAlerter } from './lib/alerts/telegram.mjs';
 import { DiscordAlerter } from './lib/alerts/discord.mjs';
+import { registry as analysisRegistry } from './src/analysis/index.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = __dirname;
@@ -28,10 +29,11 @@ for (const dir of [RUNS_DIR, MEMORY_DIR, join(MEMORY_DIR, 'cold')]) {
 }
 
 // === State ===
-let currentData = null;    // Current synthesized dashboard data
-let lastSweepTime = null;  // Timestamp of last sweep
-let sweepStartedAt = null; // Timestamp when current/last sweep started
+let currentData = null;      // Current synthesized dashboard data
+let lastSweepTime = null;    // Timestamp of last sweep
+let sweepStartedAt = null;   // Timestamp when current/last sweep started
 let sweepInProgress = false;
+let lastAnalysisResults = []; // Most recent analysis job outputs
 const startTime = Date.now();
 const sseClients = new Set();
 
@@ -232,6 +234,11 @@ if (discordAlerter.isConfigured) {
 const app = express();
 app.use(express.static(join(ROOT, 'dashboard/public')));
 
+// Analysis panel — standalone cyberpunk UI for correlation layer
+app.get('/analysis', (req, res) => {
+  res.sendFile(join(ROOT, 'dashboard/public/analysis.html'));
+});
+
 // Serve loading page until first sweep completes, then the dashboard with injected locale
 app.get('/', (req, res) => {
   if (!currentData) {
@@ -273,6 +280,16 @@ app.get('/api/health', (req, res) => {
     telegramEnabled: !!(config.telegram.botToken && config.telegram.chatId),
     refreshIntervalMinutes: config.refreshIntervalMinutes,
     language: currentLanguage,
+  });
+});
+
+// API: analysis results
+app.get('/api/analysis', (req, res) => {
+  res.json({
+    timestamp: new Date().toISOString(),
+    jobs: analysisRegistry.listJobs(),
+    results: lastAnalysisResults,
+    insights: lastAnalysisResults.flatMap(r => r.insights || []),
   });
 });
 
@@ -334,7 +351,29 @@ async function runSweepCycle() {
     const delta = memory.addRun(synthesized);
     synthesized.delta = delta;
 
-    // 5. LLM-powered trade ideas (LLM-only feature) — isolated so failures don't kill sweep
+    // 5. Run analysis jobs (correlation, exposure detection, etc.)
+    try {
+      // Collect normalized events from sources that implement SourceAdapter
+      // (grows as more sources are refactored; CISA-KEV is the first)
+      const kevEvents = rawData.sources?.['CISA-KEV']?.events || [];
+      const allEvents = [...kevEvents]; // add more adapter event arrays here as sources are refactored
+
+      lastAnalysisResults = await analysisRegistry.runAll({
+        currentData: synthesized,
+        delta,
+        events: allEvents,
+        config,
+        history: memory.getRunHistory(3),
+      });
+      synthesized.analysisInsights = lastAnalysisResults.flatMap(r => r.insights || []);
+      console.log(`[Crucix] Analysis: ${lastAnalysisResults.length} jobs, ${synthesized.analysisInsights.length} insights`);
+    } catch (analysisErr) {
+      console.error('[Crucix] Analysis layer failed (non-fatal):', analysisErr.message);
+      lastAnalysisResults = [];
+      synthesized.analysisInsights = [];
+    }
+
+    // 6. LLM-powered trade ideas (LLM-only feature) — isolated so failures don't kill sweep
     if (llmProvider?.isConfigured) {
       try {
         console.log('[Crucix] Generating LLM trade ideas...');
@@ -358,7 +397,7 @@ async function runSweepCycle() {
       synthesized.ideasSource = 'disabled';
     }
 
-    // 6. Alert evaluation — Telegram + Discord (LLM with rule-based fallback, multi-tier, semantic dedup)
+    // 7. Alert evaluation — Telegram + Discord (LLM with rule-based fallback, multi-tier, semantic dedup)
     if (delta?.summary?.totalChanges > 0) {
       if (telegramAlerter.isConfigured) {
         telegramAlerter.evaluateAndAlert(llmProvider, delta, memory).catch(err => {
@@ -377,7 +416,7 @@ async function runSweepCycle() {
 
     currentData = synthesized;
 
-    // 6. Push to all connected browsers
+    // 8. Push to all connected browsers
     broadcast({ type: 'update', data: currentData });
 
     console.log(`[Crucix] Sweep complete — ${currentData.meta.sourcesOk}/${currentData.meta.sourcesQueried} sources OK`);

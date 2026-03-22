@@ -2,10 +2,18 @@
 // No auth required. Tracks CVEs actively exploited in the wild.
 // Federal agencies must patch these within due dates — useful signal
 // for cybersecurity posture and active threat landscape.
+//
+// Implements SourceAdapter interface (src/adapters/SourceAdapter.mjs).
+// Retains legacy `briefing()` export for backwards compatibility with
+// apis/briefing.mjs orchestrator.
 
 import { safeFetch } from '../utils/fetch.mjs';
+import { createAdapter, makeEvent, EVENT_TYPES } from '../../src/adapters/SourceAdapter.mjs';
 
 const KEV_URL = 'https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json';
+const SOURCE_NAME = 'CISA-KEV';
+
+// ─── Internal helpers ────────────────────────────────────────────────────────
 
 function summarizeVulnerabilities(vulns) {
   if (!vulns.length) return {};
@@ -68,14 +76,37 @@ function summarizeVulnerabilities(vulns) {
   };
 }
 
-export async function briefing() {
+/**
+ * Map raw CISA KEV vulnerability entries to NormalizedEvents.
+ * Only maps recent entries (last 30 days) to avoid flooding the event list.
+ */
+function toEvents(recentEntries) {
+  return recentEntries.map(v => makeEvent({
+    id: v.cveID,
+    type: EVENT_TYPES.VULN_EXPLOITED,
+    timestamp: v.dateAdded ? new Date(v.dateAdded).toISOString() : new Date().toISOString(),
+    title: `${v.cveID}: ${v.vulnerabilityName || v.product}`,
+    description: (v.shortDescription || '').substring(0, 500),
+    severity: v.knownRansomwareCampaignUse === 'Known' ? 'critical' : 'high',
+    assets: {
+      cves: [v.cveID],
+    },
+  }, SOURCE_NAME));
+}
+
+// ─── Core fetch logic (shared by adapter and legacy briefing) ────────────────
+
+async function fetchKEV() {
   const data = await safeFetch(KEV_URL, { timeout: 20000 });
 
   if (data.error) {
     return {
-      source: 'CISA-KEV',
+      source: SOURCE_NAME,
       timestamp: new Date().toISOString(),
       error: data.error,
+      events: [],
+      summary: {},
+      signals: [],
     };
   }
 
@@ -100,7 +131,7 @@ export async function briefing() {
     knownRansomwareCampaignUse: v.knownRansomwareCampaignUse,
   }));
 
-  // Signals — actionable intelligence
+  // Signals — actionable intelligence strings
   const signals = [];
 
   if (summary.recentAdditions > 5) {
@@ -127,14 +158,51 @@ export async function briefing() {
   }
 
   return {
-    source: 'CISA-KEV',
+    source: SOURCE_NAME,
     timestamp: new Date().toISOString(),
     catalogVersion,
     dateReleased,
     summary,
-    vulnerabilities: recentEntries,
+    vulnerabilities: recentEntries,   // legacy field name kept for dashboard compat
+    events: toEvents(recentEntries),  // normalized SourceAdapter events
     signals,
   };
+}
+
+// ─── SourceAdapter export ────────────────────────────────────────────────────
+
+const cisaKevAdapter = createAdapter({
+  name: SOURCE_NAME,
+  tier: 6,
+  requiresApiKey: false,
+
+  /**
+   * @param {import('../../src/adapters/SourceAdapter.mjs').SourceContext} ctx
+   * @returns {Promise<import('../../src/adapters/SourceAdapter.mjs').SourceResult>}
+   */
+  async fetch(ctx) { // eslint-disable-line no-unused-vars
+    const result = await fetchKEV();
+    return {
+      source: result.source,
+      timestamp: result.timestamp,
+      events: result.events || [],
+      summary: result.summary || {},
+      signals: (result.signals || []).map(s => s.signal),
+      ...(result.error ? { error: result.error } : {}),
+      // Preserve legacy fields for dashboard backwards compatibility
+      catalogVersion: result.catalogVersion,
+      dateReleased: result.dateReleased,
+      vulnerabilities: result.vulnerabilities,
+    };
+  },
+});
+
+export default cisaKevAdapter;
+
+// ─── Legacy briefing() export (keeps apis/briefing.mjs working as-is) ───────
+
+export async function briefing() {
+  return fetchKEV();
 }
 
 // Run standalone

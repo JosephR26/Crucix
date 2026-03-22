@@ -12,7 +12,10 @@
     "brief:save": "node apis/save-briefing.mjs",
     "diag": "node diag.mjs",
     "clean": "node scripts/clean.mjs",
-    "fresh-start": "npm run clean && npm start"
+    "fresh-start": "npm run clean && npm start",
+    "lint": "eslint \"**/*.mjs\" --ignore-path .eslintrc.json",
+    "lint:fix": "eslint \"**/*.mjs\" --fix --ignore-path .eslintrc.json",
+    "format": "prettier --write \"**/*.mjs\" \"**/*.js\""
   },
   "keywords": [
     "osint",
@@ -28,6 +31,10 @@
   },
   "dependencies": {
     "express": "^5.1.0"
+  },
+  "devDependencies": {
+    "eslint": "^9.0.0",
+    "prettier": "^3.0.0"
   },
   "optionalDependencies": {
     "discord.js": "^14.25.1"  },

@@ -1,0 +1,27 @@
+{
+  "env": {
+    "es2022": true,
+    "node": true,
+    "browser": true
+  },
+  "parserOptions": {
+    "ecmaVersion": 2022,
+    "sourceType": "module"
+  },
+  "rules": {
+    "no-unused-vars": ["warn", { "argsIgnorePattern": "^_", "varsIgnorePattern": "^_" }],
+    "no-undef": "error",
+    "no-console": "off",
+    "prefer-const": "warn",
+    "no-var": "error",
+    "eqeqeq": ["warn", "smart"],
+    "no-duplicate-imports": "error"
+  },
+  "ignorePatterns": [
+    "node_modules/",
+    "runs/",
+    "docs/",
+    "dashboard/public/jarvis.html",
+    "dashboard/public/loading.html"
+  ]
+}
