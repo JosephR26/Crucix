@@ -46,6 +46,21 @@ import { briefing as yfinance } from './sources/yfinance.mjs';
 // === Tier 6: Cyber & Infrastructure ===
 import { briefing as cisaKev } from './sources/cisa-kev.mjs';
 import { briefing as cloudflareRadar } from './sources/cloudflare-radar.mjs';
+import { briefing as ncsc } from './sources/ncsc.mjs';
+
+// === Tier 7: UK-Specific Intelligence ===
+import { briefing as ons } from './sources/ons.mjs';
+import { briefing as ukhsa } from './sources/ukhsa.mjs';
+import { briefing as fcdo } from './sources/fcdo-travel.mjs';
+
+// === Tier 8: Disaster & Space Weather ===
+import { briefing as gdacs } from './sources/gdacs.mjs';
+import { briefing as spaceWeather } from './sources/space-weather.mjs';
+import { briefing as abuseCh } from './sources/abuse-ch.mjs';
+
+// === Tier 9: Cyber Enrichment ===
+import { briefing as shodanIdb } from './sources/shodan-internetdb.mjs';
+import { briefing as censys } from './sources/censys.mjs';
 
 const SOURCE_TIMEOUT_MS = 30_000; // 30s max per individual source
 
@@ -67,7 +82,7 @@ export async function runSource(name, fn, ...args) {
 }
 
 export async function fullBriefing() {
-  console.error('[Crucix] Starting intelligence sweep — 29 sources...');
+  console.error('[Crucix] Starting intelligence sweep — 38 sources...');
   const start = Date.now();
 
   const allPromises = [
@@ -111,6 +126,21 @@ export async function fullBriefing() {
     // Tier 6: Cyber & Infrastructure
     runSource('CISA-KEV', cisaKev),
     runSource('Cloudflare-Radar', cloudflareRadar),
+    runSource('NCSC-UK', ncsc),
+
+    // Tier 7: UK-Specific Intelligence
+    runSource('ONS', ons),
+    runSource('UKHSA', ukhsa),
+    runSource('FCDO-TRAVEL', fcdo),
+
+    // Tier 8: Disaster & Space Weather
+    runSource('GDACS', gdacs),
+    runSource('SPACE-WEATHER', spaceWeather),
+    runSource('ABUSE.CH', abuseCh),
+
+    // Tier 9: Cyber Enrichment
+    runSource('SHODAN-INTERNETDB', shodanIdb),
+    runSource('CENSYS', censys),
   ];
 
   // Each runSource has its own 30s timeout, so allSettled will resolve

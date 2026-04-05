@@ -171,9 +171,14 @@ const RSS_SOURCE_FALLBACKS = {
   'SBS Australia': { lat: -35.2809, lon: 149.13, region: 'Australia' },
   'Indian Express': { lat: 28.6139, lon: 77.209, region: 'India' },
   'The Hindu': { lat: 13.0827, lon: 80.2707, region: 'India' },
-  'MercoPress': { lat: -34.9011, lon: -56.1645, region: 'South America' }
+  'MercoPress': { lat: -34.9011, lon: -56.1645, region: 'South America' },
+  'BBC UK': { lat: 51.5074, lon: -0.1278, region: 'UK' },
+  'BBC Business': { lat: 51.5074, lon: -0.1278, region: 'UK' },
+  'BBC Politics': { lat: 51.5007, lon: -0.1246, region: 'UK' },
+  'Guardian': { lat: 51.5074, lon: -0.1278, region: 'UK' },
+  'Global Voices': { lat: 42.3601, lon: -71.0589, region: 'Global' },
 };
-const REGIONAL_NEWS_SOURCES = ['MercoPress', 'Indian Express', 'The Hindu', 'SBS Australia'];
+const REGIONAL_NEWS_SOURCES = ['MercoPress', 'Indian Express', 'The Hindu', 'SBS Australia', 'BBC UK', 'BBC Politics', 'Global Voices'];
 
 export async function fetchAllNews() {
   const feeds = [
@@ -181,11 +186,17 @@ export async function fetchAllNews() {
     ['http://feeds.bbci.co.uk/news/world/rss.xml', 'BBC'],
     ['https://rss.nytimes.com/services/xml/rss/nyt/World.xml', 'NYT'],
     ['https://www.aljazeera.com/xml/rss/all.xml', 'Al Jazeera'],
+    ['https://globalvoices.org/feed/', 'Global Voices'],
     // USA
     ['https://feeds.npr.org/1001/rss.xml', 'NPR'],
     ['https://feeds.bbci.co.uk/news/technology/rss.xml', 'BBC Tech'],
     ['http://feeds.bbci.co.uk/news/science_and_environment/rss.xml', 'BBC Science'],
     ['https://rss.nytimes.com/services/xml/rss/nyt/Americas.xml', 'NYT Americas'],
+    // UK
+    ['https://feeds.bbci.co.uk/news/uk/rss.xml', 'BBC UK'],
+    ['https://feeds.bbci.co.uk/news/business/rss.xml', 'BBC Business'],
+    ['https://www.theguardian.com/world/rss', 'Guardian'],
+    ['https://feeds.bbci.co.uk/news/politics/rss.xml', 'BBC Politics'],
     // Europe
     ['https://rss.dw.com/rdf/rss-en-all', 'DW'],
     ['https://www.france24.com/en/rss', 'France 24'],
@@ -201,6 +212,8 @@ export async function fetchAllNews() {
     // India
     ['https://indianexpress.com/section/india/feed/', 'Indian Express'],
     ['https://www.thehindu.com/news/national/feeder/default.rss', 'The Hindu'],
+    // Middle East
+    ['https://rss.nytimes.com/services/xml/rss/nyt/MiddleEast.xml', 'NYT Middle East'],
     // South America
     ['https://en.mercopress.com/rss/latin-america', 'MercoPress'],
   ];
@@ -539,6 +552,92 @@ export async function synthesize(data) {
     }))
   };
 
+  // ONS UK economic indicators
+  const onsData = data.sources.ONS || {};
+  const onsIndicators = onsData.indicators || {};
+  const ons = {
+    gdp: onsIndicators.gdp || null,
+    unemployment: onsIndicators.unemployment || null,
+    cpi: onsIndicators.cpi || null,
+    signals: onsData.signals || [],
+  };
+
+  // UKHSA UK health surveillance
+  const ukhsaData = data.sources.UKHSA || {};
+  const ukhsaMetrics = ukhsaData.metrics || {};
+  const ukhsa = {
+    covidCases: ukhsaMetrics.covid_cases || null,
+    covidAdmissions: ukhsaMetrics.covid_admissions || null,
+    fluPositivity: ukhsaMetrics.flu_positivity || null,
+    fluHospital: ukhsaMetrics.flu_hospital || null,
+    signals: ukhsaData.signals || [],
+  };
+
+  // NCSC UK cyber alerts
+  const ncscData = data.sources['NCSC-UK'] || {};
+  const ncsc = {
+    items: (ncscData.items || []).slice(0, 10),
+    summary: ncscData.summary || {},
+    signals: (ncscData.signals || []).map(s => typeof s === 'string' ? s : s.signal),
+  };
+
+  // FCDO UK travel advisories
+  const fcdoData = data.sources['FCDO-TRAVEL'] || {};
+  const fcdo = {
+    totalCountries: fcdoData.summary?.totalCountries || 0,
+    recentChanges: (fcdoData.recentChanges || fcdoData.summary?.recentChanges || []).slice(0, 10),
+    signals: (fcdoData.signals || []).map(s => typeof s === 'string' ? s : s.signal),
+  };
+
+  // GDACS global disaster alerts
+  const gdacsData = data.sources.GDACS || {};
+  const gdacsSummary = gdacsData.summary || {};
+  const gdacsAlerts = {
+    totalEvents: gdacsSummary.total || 0,
+    byLevel: gdacsSummary.byLevel || {},
+    byType: gdacsSummary.byType || {},
+    disasters: (gdacsData.disasters || []).slice(0, 15).map(e => ({
+      title: e.title, typeName: e.typeName, alertLevel: e.alertLevel,
+      country: e.country, lat: e.lat, lon: e.lon, date: e.date,
+      affected: e.affected, deaths: e.deaths,
+    })),
+    signals: (gdacsData.signals || []).map(s => typeof s === 'string' ? s : s.signal),
+  };
+
+  // NOAA Space Weather
+  const swData = data.sources['SPACE-WEATHER'] || {};
+  const spaceWeather = {
+    current: swData.current || {},
+    alerts: (swData.alerts || []).slice(0, 5),
+    signals: (swData.signals || []).map(s => typeof s === 'string' ? s : s.signal),
+  };
+
+  // Abuse.ch threat intel
+  const abuseData = data.sources['ABUSE.CH'] || {};
+  const abuseSummary = abuseData.summary || {};
+  const urlhaus = {
+    urlhausActive: abuseSummary.urlhausActive || 0,
+    malwareBazaar24h: abuseSummary.malwareBazaar24h || 0,
+    sslBlacklisted: abuseSummary.sslBlacklisted || 0,
+    topMalwareFamilies: (abuseSummary.topMalwareFamilies || []).slice(0, 8),
+    recentSamples: (abuseData.recentSamples || []).slice(0, 10),
+    signals: (abuseData.signals || []).map(s => typeof s === 'string' ? s : s.signal),
+  };
+
+  // Shodan InternetDB passive IP intel
+  const shodanData = data.sources['SHODAN-INTERNETDB'] || {};
+  const shodan = {
+    summary: shodanData.summary || {},
+    signals: (shodanData.signals || []).map(s => typeof s === 'string' ? s : s.signal),
+  };
+
+  // Censys certificate transparency
+  const censysData = data.sources.CENSYS || {};
+  const censys = {
+    summary: censysData.summary || {},
+    signals: (censysData.signals || []).map(s => typeof s === 'string' ? s : s.signal),
+  };
+
   const health = Object.entries(data.sources).map(([name, src]) => ({
     n: name, err: Boolean(src.error), stale: Boolean(src.stale)
   }));
@@ -596,6 +695,7 @@ export async function synthesize(data) {
     sdr: { total: sdrNet.totalReceivers || 0, online: sdrNet.online || 0, zones: sdrZones },
     tg: { posts: tgData.totalPosts || 0, urgent: tgUrgent, topPosts: tgTop },
     who, fred, energy, bls, treasury, gscpi, defense, noaa, epa, acled, gdelt, space, health, news,
+    ons, ukhsa, ncsc, fcdo, gdacs: gdacsAlerts, spaceWeather, urlhaus, shodan, censys,
     markets, // Live Yahoo Finance market data
     ideas: [], ideasSource: 'disabled',
     // newsFeed for ticker (merged RSS + GDELT + Telegram)

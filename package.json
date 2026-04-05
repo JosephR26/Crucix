@@ -30,14 +30,17 @@
     "npm": ">=10"
   },
   "dependencies": {
-    "express": "^5.1.0"
+    "express": "^5.1.0",
+    "fast-xml-parser": "^5.5.10"
   },
   "devDependencies": {
     "eslint": "^9.0.0",
     "prettier": "^3.0.0"
   },
   "optionalDependencies": {
-    "discord.js": "^14.25.1"  },
+    "discord.js": "^14.25.1"
+  },
   "overrides": {
-    "undici": "^7.24.4"  }
+    "undici": "^7.24.4"
+  }
 }

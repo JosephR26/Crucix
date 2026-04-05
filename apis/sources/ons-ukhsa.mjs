@@ -120,7 +120,7 @@ async function fetchONSUKHSA() {
   }
 
   // Trade deficit widening
-  if (trade?.value !== null && trade.value < -10000) {
+  if (trade != null && trade.value != null && trade.value < -10000) {
     signals.push({
       severity: 'medium',
       signal:   `UK trade deficit: £${Math.abs(trade.value).toLocaleString()}m (${trade.period}) — supply chain / currency pressure`,
